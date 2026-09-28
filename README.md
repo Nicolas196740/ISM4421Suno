@@ -8,20 +8,23 @@ A one-page app that generates songs with the [Suno API](https://docs.sunoapi.org
 - Instrumental toggle and model picker (V6, V6 Wild, V6 Mini).
 - Live status polling, playback that can start before the song is finished, MP3 and cover downloads, and a lyrics view.
 - Song history saved in your browser, plus your credit balance in the header.
+- **Bring your own API key**: each user pastes their own sunoapi.org key when they open the app.
 
 ## How it works
 - `index.html`: the whole front end (no build step).
-- `netlify/functions/suno.mjs`: serverless proxy at `/api/*`. It holds the API key so the key never reaches the browser.
+- `netlify/functions/suno.mjs`: serverless pass-through at `/api/*`. It forwards the user's key to Suno with each request and never stores or logs it.
+
+## API keys
+No key is stored in the code or in Netlify. When someone opens the app, it asks for their Suno API key (get one at https://sunoapi.org/api-key).
+- By default the key is kept only for that browser tab and is cleared when the tab closes.
+- Ticking **Remember on this device** keeps it in that browser until they click **Forget key**.
 
 ## Deploy to Netlify
 1. In Netlify, go to **Add new site → Import an existing project**, pick this repo and branch `main`. Leave the build command empty and set the publish directory to `.`.
-2. Under **Site configuration → Environment variables**, add `SUNO_API_KEY` with your key from sunoapi.org.
-3. (Recommended) Add `APP_PASSWORD` so only people with the password can spend your credits.
-4. Redeploy (**Deploys → Trigger deploy**) so the variables take effect.
+2. Click **Deploy**. No environment variables are needed.
 
 ## Run locally
 ```bash
 npm i -g netlify-cli
-cp .env.example .env   # fill in SUNO_API_KEY
 netlify dev
 ```

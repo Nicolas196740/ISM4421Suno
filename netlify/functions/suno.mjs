@@ -1,5 +1,6 @@
-// Server-side proxy for the Suno API (https://docs.sunoapi.org).
-// Keeps SUNO_API_KEY off the client. Routes:
+// Pass-through proxy for the Suno API (https://docs.sunoapi.org).
+// Each user supplies their own API key in the x-suno-key header; it is forwarded
+// to Suno for that request only and is never stored or logged. Routes:
 //   POST /api/generate        -> /api/v1/generate
 //   GET  /api/status?taskId=  -> /api/v1/generate/record-info
 //   POST /api/lyrics          -> /api/v1/lyrics
@@ -77,13 +78,8 @@ export default async (req, context) => {
   // Suno posts results here; we poll instead, so just acknowledge.
   if (route === "callback") return json({ status: "received" });
 
-  const key = process.env.SUNO_API_KEY;
-  if (!key) return json({ code: 500, msg: "SUNO_API_KEY is not set in Netlify environment variables." }, 500);
-
-  const password = process.env.APP_PASSWORD;
-  if (password && req.headers.get("x-app-password") !== password) {
-    return json({ code: 401, msg: "Wrong or missing app password." }, 401);
-  }
+  const key = (req.headers.get("x-suno-key") || "").trim();
+  if (!key) return json({ code: 401, msg: "Add your Suno API key to continue." }, 401);
 
   const siteUrl = process.env.URL || url.origin;
   const callBackUrl = `${siteUrl}/api/callback`;

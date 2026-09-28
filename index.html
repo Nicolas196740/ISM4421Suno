@@ -44,6 +44,13 @@
   .credits { font-size: 13px; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
              padding: 6px 12px; border-radius: 999px; cursor: pointer; }
   .credits b { color: var(--text); }
+  .head-actions { display: flex; align-items: center; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; margin: 12px 0 0; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .modal .muted { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .modal .muted a { color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; }
 
   .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0 0 8px; letter-spacing: -0.03em; }
   .hero h1 span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -143,7 +150,10 @@
 <div class="wrap">
   <header>
     <div class="brand"><div class="logo">🎵</div> SongForge</div>
-    <div class="credits" id="credits" title="Click to refresh">Credits: <b id="creditsVal">—</b></div>
+    <div class="head-actions">
+      <div class="credits" id="credits" title="Click to refresh">Credits: <b id="creditsVal">—</b></div>
+      <button class="btn ghost sm" id="keyBtn" type="button">🔑 Add API key</button>
+    </div>
   </header>
 
   <section class="hero">
@@ -256,12 +266,18 @@
   <footer>Powered by the Suno API via sunoapi.org</footer>
 </div>
 
-<!-- Password modal (only shown if the server has APP_PASSWORD set) -->
-<div class="modal" id="pwModal">
-  <form class="card" id="pwForm">
-    <h2>🔒 Enter app password</h2>
-    <input type="password" id="pwInput" placeholder="Password" autocomplete="current-password" />
-    <button class="btn full" type="submit">Unlock</button>
+<!-- API key modal: the key stays in this browser and is never stored on a server -->
+<div class="modal" id="keyModal">
+  <form class="card" id="keyForm">
+    <h2>🔑 Your Suno API key</h2>
+    <p class="muted">Songs use your own credits. Get a key at <a href="https://sunoapi.org/api-key" target="_blank" rel="noopener">sunoapi.org/api-key</a>. The key stays in your browser and is only passed through to Suno with each request. It is never saved on our server.</p>
+    <input type="password" id="keyInput" placeholder="Paste your API key" autocomplete="off" spellcheck="false" />
+    <label class="check"><input type="checkbox" id="keyRemember" /> Remember on this device</label>
+    <div class="error" id="keyError"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" type="button" id="keyForget">Forget key</button>
+      <button class="btn" type="submit">Save</button>
+    </div>
   </form>
 </div>
 
@@ -269,7 +285,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const LS_JOBS = "songforge.jobs.v1";
-  const LS_PW = "songforge.pw";
+  const KEY_STORE = "songforge.apikey";
   const POLL_MS = 5000;
   const MAX_POLL_MS = 10 * 60 * 1000;
   const FAIL_STATES = ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR", "GENERATE_LYRICS_FAILED"];
@@ -295,31 +311,71 @@
   function save() {
     try { localStorage.setItem(LS_JOBS, JSON.stringify(jobs.slice(0, 50))); } catch {}
   }
-  function getPw() { try { return localStorage.getItem(LS_PW) || ""; } catch { return ""; } }
+  // ---------- API key (kept in this browser only) ----------
+  // Default: sessionStorage (cleared when the tab closes). "Remember" opts into localStorage.
+  let apiKey = "";
+  try { apiKey = sessionStorage.getItem(KEY_STORE) || localStorage.getItem(KEY_STORE) || ""; } catch {}
+
+  function setKey(key, remember) {
+    apiKey = key;
+    try {
+      sessionStorage.removeItem(KEY_STORE);
+      localStorage.removeItem(KEY_STORE);
+      if (key) (remember ? localStorage : sessionStorage).setItem(KEY_STORE, key);
+    } catch {}
+    updateKeyBtn();
+  }
+  function updateKeyBtn() {
+    $("keyBtn").textContent = apiKey ? "🔑 Key ••••" + apiKey.slice(-4) : "🔑 Add API key";
+  }
+
+  let keyWaiters = [];
+  function openKeyModal(errMsg) {
+    $("keyInput").value = apiKey;
+    try { $("keyRemember").checked = !!localStorage.getItem(KEY_STORE); } catch {}
+    $("keyError").textContent = errMsg || "";
+    $("keyError").style.display = errMsg ? "block" : "none";
+    $("keyModal").classList.add("open");
+    setTimeout(() => $("keyInput").focus(), 0);
+  }
+  function closeKeyModal() { $("keyModal").classList.remove("open"); }
+  function waitForKey(errMsg) {
+    if (!$("keyModal").classList.contains("open")) openKeyModal(errMsg);
+    return new Promise((res, rej) => keyWaiters.push({ res, rej }));
+  }
+  $("keyForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const key = $("keyInput").value.trim();
+    if (!key) { $("keyError").textContent = "Paste your API key."; $("keyError").style.display = "block"; return; }
+    setKey(key, $("keyRemember").checked);
+    closeKeyModal();
+    keyWaiters.forEach((w) => w.res()); keyWaiters = [];
+    refreshCredits();
+  });
+  $("keyForget").addEventListener("click", () => {
+    setKey("", false);
+    closeKeyModal();
+    keyWaiters.forEach((w) => w.rej(new Error("An API key is required."))); keyWaiters = [];
+    $("creditsVal").textContent = "—";
+  });
+  $("keyModal").addEventListener("click", (e) => {
+    if (e.target !== $("keyModal")) return;
+    closeKeyModal();
+    keyWaiters.forEach((w) => w.rej(new Error("An API key is required."))); keyWaiters = [];
+  });
+  $("keyBtn").addEventListener("click", () => openKeyModal());
 
   // ---------- api ----------
-  let pwResolver = null;
-  function askPassword() {
-    $("pwModal").classList.add("open");
-    $("pwInput").focus();
-    return new Promise((res) => { pwResolver = res; });
-  }
-  $("pwForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    try { localStorage.setItem(LS_PW, $("pwInput").value); } catch {}
-    $("pwModal").classList.remove("open");
-    if (pwResolver) { pwResolver(); pwResolver = null; }
-  });
-
   async function api(path, opts = {}, retried = false) {
+    if (!apiKey) await waitForKey();
     const res = await fetch("/api/" + path, {
       ...opts,
-      headers: { "Content-Type": "application/json", "x-app-password": getPw(), ...(opts.headers || {}) },
+      headers: { "Content-Type": "application/json", "x-suno-key": apiKey, ...(opts.headers || {}) },
     });
     let data;
     try { data = await res.json(); } catch { throw new Error(`Server error (HTTP ${res.status})`); }
-    if (res.status === 401 && data.msg && data.msg.includes("app password") && !retried) {
-      await askPassword();
+    if (data.code === 401 && !retried) {
+      await waitForKey("Suno rejected that key. Check it and try again.");
       return api(path, opts, true);
     }
     if (data.code !== 200) throw new Error(friendly(data.code, data.msg));
@@ -337,6 +393,7 @@
 
   // ---------- credits ----------
   async function refreshCredits() {
+    if (!apiKey) { $("creditsVal").textContent = "—"; return; }
     $("creditsVal").textContent = "…";
     try { $("creditsVal").textContent = await api("credits"); }
     catch { $("creditsVal").textContent = "—"; }
@@ -472,6 +529,7 @@
   function poll(job) {
     if (pollers[job.taskId]) return;
     const tick = async () => {
+      if (!apiKey) { pollers[job.taskId] = setTimeout(tick, POLL_MS); return; } // wait until a key is entered
       try {
         const d = await api("status?taskId=" + encodeURIComponent(job.taskId));
         const r = d.response || {};
@@ -591,7 +649,9 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ---------- init ----------
+  updateKeyBtn();
   render();
+  if (!apiKey) openKeyModal();
   jobs.forEach((j) => {
     if (j.status !== "SUCCESS" && !FAIL_STATES.includes(j.status)) {
       if (j.status === "TIMEOUT") j.status = "PENDING";
