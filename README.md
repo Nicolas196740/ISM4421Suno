@@ -9,6 +9,7 @@ A one-page app that generates songs with the [Suno API](https://docs.sunoapi.org
 - Live status polling, playback that can start before the song is finished, MP3 and cover downloads, and a lyrics view.
 - Song history saved in your browser, plus your credit balance in the header.
 - **Email login** (Supabase): sign up, confirm your email, sign in, sign out, reset a forgotten password.
+- **User profiles**: display name, unique @username, bio, favorite genres and a profile photo. New users set one up right after their first sign-in; edit it any time from the header.
 - **Bring your own API key**: each user pastes their own sunoapi.org key after signing in.
 
 ## How it works
@@ -21,6 +22,13 @@ A one-page app that generates songs with the [Suno API](https://docs.sunoapi.org
 - Song history is kept per account in the browser.
 - Signing out also clears the Suno key from that browser.
 - Supabase's built-in email sender only allows a few emails per hour. That's fine for testing. For more sign-ups, add your own SMTP provider under **Authentication → Emails → SMTP Settings**.
+
+## Profiles (database)
+Schema lives in `supabase/migrations/20261005000001_profiles.sql` (already applied to project **ISM 4421**).
+- `public.profiles`: one row per user, created automatically at sign-up by a trigger.
+- Row Level Security: each user can only read and edit their own profile. Signed-out visitors can't read any.
+- Usernames are unique, 3–20 lowercase letters, numbers or underscores (enforced by the database).
+- Photos go in the public `avatars` storage bucket (2 MB max, images only). Users can only upload to or delete from their own folder. The app crops photos to 256×256 before upload and deletes the old photo when it's replaced.
 
 ## API keys
 No key is stored in the code or in Netlify. When someone opens the app, it asks for their Suno API key (get one at https://sunoapi.org/api-key).

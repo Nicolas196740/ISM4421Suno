@@ -159,6 +159,30 @@
   .linkbtn:hover { text-decoration: underline; }
   .msg { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.4); color: #bbf7d0; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-top: 12px; display: none; }
   .loading { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
+
+  /* ---------- profile ---------- */
+  .avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: grid; place-items: center;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 700; font-size: 12px; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .avatar.lg { width: 80px; height: 80px; font-size: 28px; }
+  .profile-btn { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; }
+  .profile-btn .pname { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 480px) { .profile-btn .pname { display: none; } .profile-btn { padding: 4px; } }
+  .modal { overflow-y: auto; }
+  .modal .card.profile-card { max-width: 460px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 4px; }
+  .modal-head h2 { margin: 0; }
+  .avatar-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+  .avatar-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .avatar-actions label.btn { margin: 0; font-size: 13px; }
+  .avatar-actions .linkbtn { font-size: 13px; }
+  .at-input { display: flex; align-items: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding-left: 12px; }
+  .at-input:focus-within { border-color: var(--accent); }
+  .at-input span { color: var(--muted); }
+  .at-input input { border: 0; background: transparent; padding-left: 4px; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
+  .field-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .field-hint.bad { color: #fca5a5; }
 </style>
 </head>
 <body>
@@ -204,7 +228,9 @@
     <div class="head-actions">
       <div class="credits" id="credits" title="Click to refresh">Credits: <b id="creditsVal">—</b></div>
       <button class="btn ghost sm" id="keyBtn" type="button">🔑 Add API key</button>
-      <span class="user" id="userEmail"></span>
+      <button class="btn ghost sm profile-btn" id="profileBtn" type="button" title="Your profile">
+        <span class="avatar" id="headerAvatar"></span><span class="pname" id="headerName">Profile</span>
+      </button>
       <button class="btn ghost sm" id="signOutBtn" type="button">Sign out</button>
     </div>
   </header>
@@ -331,6 +357,45 @@
       <button class="btn ghost" type="button" id="keyForget">Forget key</button>
       <button class="btn" type="submit">Save</button>
     </div>
+  </form>
+</div>
+
+<!-- Profile: first-time setup and editing (stored in Supabase table public.profiles) -->
+<div class="modal" id="profileModal">
+  <form class="card profile-card" id="profileForm" novalidate>
+    <div class="modal-head">
+      <h2 id="profileTitle">Create your profile</h2>
+      <button type="button" class="btn ghost sm" id="profileClose" aria-label="Close">✕</button>
+    </div>
+    <p class="muted" id="profileSub">Tell us a bit about you. Only you can see your profile.</p>
+
+    <div class="avatar-row">
+      <div class="avatar lg" id="avatarPreview"></div>
+      <div class="avatar-actions">
+        <label class="btn ghost sm" for="avatarFile">📷 Upload photo</label>
+        <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+        <button type="button" class="linkbtn" id="avatarRemove">Remove photo</button>
+        <div class="field-hint">JPG, PNG, WebP or GIF. We crop it to a square.</div>
+      </div>
+    </div>
+
+    <label for="pfDisplay">Display name</label>
+    <input type="text" id="pfDisplay" maxlength="50" placeholder="Nicolas M." autocomplete="name" />
+
+    <label for="pfUsername">Username</label>
+    <div class="at-input"><span>@</span><input type="text" id="pfUsername" maxlength="20" placeholder="nico_beats" autocapitalize="off" autocomplete="username" spellcheck="false" /></div>
+    <div class="field-hint" id="pfUsernameHint">3–20 characters: lowercase letters, numbers, underscores.</div>
+
+    <label for="pfBio">Bio <span class="hint">(optional)</span></label>
+    <textarea id="pfBio" maxlength="280" placeholder="Making beats between shifts." style="min-height:72px"></textarea>
+    <div class="counter"><span data-count="pfBio">0</span>/280</div>
+
+    <label>Favorite genres <span class="hint">(optional, up to 10)</span></label>
+    <div class="chips" id="pfGenres"></div>
+
+    <div class="field-hint" id="pfMeta" style="margin-top:14px"></div>
+    <div class="error" id="profileError"></div>
+    <button class="btn full" type="submit" id="profileSave">Save profile</button>
   </form>
 </div>
 
@@ -487,7 +552,7 @@
     $("vocalGender").disabled = $("instrumental").checked;
   });
 
-  document.querySelectorAll(".chips").forEach((wrap) =>
+  document.querySelectorAll(".chips[data-target]").forEach((wrap) =>
     wrap.addEventListener("click", (e) => {
       if (!e.target.classList.contains("chip")) return;
       const input = $(wrap.dataset.target);
@@ -731,11 +796,12 @@
     if (currentUser && currentUser.id === user.id) return; // already running for this account
     stopPolling();
     currentUser = user;
-    $("userEmail").textContent = user.email || "";
     jobs = load();
     updateKeyBtn();
     render();
-    if (!apiKey) openKeyModal();
+    renderHeaderProfile(null);
+    // Profile first (new users set one up), then ask for the Suno key if needed.
+    ensureProfile(user).then(() => { if (currentUser === user && !apiKey) openKeyModal(); });
     jobs.forEach((j) => {
       if (j.status !== "SUCCESS" && !FAIL_STATES.includes(j.status)) {
         if (j.status === "TIMEOUT") j.status = "PENDING";
@@ -750,9 +816,258 @@
     stopPolling();
     currentUser = null;
     jobs = [];
+    profile = null;
+    profileWaiter = null;
+    closeProfileModal(true);
     closeKeyModal();
     keyWaiters.forEach((w) => w.rej(new Error("Signed out."))); keyWaiters = [];
   }
+
+  // ---------- profile (Supabase table public.profiles + storage bucket "avatars") ----------
+  const GENRES = ["pop", "hip-hop", "rap", "R&B", "rock", "indie", "EDM", "house", "lo-fi", "jazz", "country",
+                  "latin", "reggaeton", "afrobeats", "K-pop", "classical", "cinematic", "metal", "punk", "acoustic"];
+  const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+  let profile = null;          // current user's row
+  let profileLocked = false;   // true during first-time setup (can't dismiss)
+  let pendingAvatar = null;    // { blob, url } chosen but not yet uploaded
+  let removeAvatar = false;
+  let profileWaiter = null;
+
+  const isComplete = (p) => !!(p && p.username && p.display_name);
+
+  function initials(name, email) {
+    const src = (name || email || "?").trim();
+    const parts = src.split(/[\s@._-]+/).filter(Boolean);
+    return ((parts[0] || "?")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
+  }
+  function setAvatar(el, url, name, email) {
+    el.innerHTML = "";
+    if (url) {
+      const img = document.createElement("img");
+      img.src = url; img.alt = "";
+      img.onerror = () => { el.textContent = initials(name, email); };
+      el.appendChild(img);
+    } else {
+      el.textContent = initials(name, email);
+    }
+  }
+  function renderHeaderProfile(p) {
+    const email = currentUser ? currentUser.email : "";
+    setAvatar($("headerAvatar"), p && p.avatar_url, p && p.display_name, email);
+    $("headerName").textContent = (p && p.display_name) || email || "Profile";
+  }
+
+  async function fetchProfile(user) {
+    const { data, error } = await sb.from("profiles").select("*").eq("id", user.id).limit(1);
+    if (error) throw error;
+    return (data && data[0]) || { id: user.id, username: null, display_name: null, bio: null, favorite_genres: [], avatar_url: null };
+  }
+
+  async function ensureProfile(user) {
+    try {
+      profile = await fetchProfile(user);
+    } catch (e) {
+      // Don't block music-making if profiles can't load; they can retry from the header.
+      profile = null;
+      renderHeaderProfile(null);
+      return;
+    }
+    if (currentUser !== user) return;
+    renderHeaderProfile(profile);
+    if (!isComplete(profile)) {
+      openProfileModal(true);
+      await new Promise((res) => { profileWaiter = res; });
+    }
+  }
+
+  function renderGenreChips(selected) {
+    const wrap = $("pfGenres");
+    const all = [...GENRES, ...selected.filter((g) => !GENRES.includes(g))];
+    wrap.innerHTML = all.map((g) => `<span class="chip${selected.includes(g) ? " on" : ""}" data-genre="${esc(g)}">${esc(g)}</span>`).join("");
+  }
+  $("pfGenres").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    if (!chip.classList.contains("on") && $("pfGenres").querySelectorAll(".chip.on").length >= 10) {
+      return showProfileError("You can pick up to 10 genres.");
+    }
+    chip.classList.toggle("on");
+    showProfileError("");
+  });
+
+  function showProfileError(msg) { $("profileError").textContent = msg; $("profileError").style.display = msg ? "block" : "none"; }
+
+  function previewAvatar() {
+    const url = pendingAvatar ? pendingAvatar.url : (removeAvatar ? null : profile && profile.avatar_url);
+    setAvatar($("avatarPreview"), url, $("pfDisplay").value, currentUser && currentUser.email);
+    $("avatarRemove").hidden = !url;
+  }
+
+  function openProfileModal(locked) {
+    if (!currentUser) return;
+    profileLocked = !!locked;
+    const p = profile || {};
+    pendingAvatar = null; removeAvatar = false;
+    $("profileTitle").textContent = locked ? "Create your profile" : "Your profile";
+    $("profileSub").textContent = locked
+      ? "Welcome! Pick a name and username to get started. Only you can see your profile."
+      : "Update your details. Only you can see your profile.";
+    $("profileClose").hidden = profileLocked;
+    $("pfDisplay").value = p.display_name || "";
+    $("pfUsername").value = p.username || "";
+    $("pfUsername").dataset.edited = p.username ? "1" : "";
+    $("pfBio").value = p.bio || "";
+    $("pfBio").dispatchEvent(new Event("input"));
+    renderGenreChips(p.favorite_genres || []);
+    const since = p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "";
+    $("pfMeta").textContent = `Signed in as ${currentUser.email}` + (since ? ` · Member since ${since}` : "");
+    $("pfUsernameHint").className = "field-hint";
+    $("pfUsernameHint").textContent = "3–20 characters: lowercase letters, numbers, underscores.";
+    $("profileSave").textContent = locked ? "Create profile" : "Save profile";
+    showProfileError("");
+    previewAvatar();
+    $("profileModal").classList.add("open");
+    setTimeout(() => (p.display_name ? $("pfBio") : $("pfDisplay")).focus(), 0);
+  }
+  function closeProfileModal(force) {
+    if (profileLocked && !force) return;
+    if (pendingAvatar) URL.revokeObjectURL(pendingAvatar.url);
+    pendingAvatar = null;
+    $("profileModal").classList.remove("open");
+  }
+  $("profileBtn").addEventListener("click", async () => {
+    if (!profile) { // first load failed; try again
+      try { profile = await fetchProfile(currentUser); renderHeaderProfile(profile); }
+      catch { return alert("Couldn't load your profile. Check your connection and try again."); }
+    }
+    openProfileModal(!isComplete(profile));
+  });
+  $("profileClose").addEventListener("click", () => closeProfileModal());
+  $("profileModal").addEventListener("click", (e) => { if (e.target === $("profileModal")) closeProfileModal(); });
+
+  // Suggest a username from the display name during first-time setup.
+  $("pfDisplay").addEventListener("input", () => {
+    if (profileLocked && !$("pfUsername").dataset.edited) {
+      $("pfUsername").value = $("pfDisplay").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
+      checkUsername();
+    }
+    if (!pendingAvatar && !(profile && profile.avatar_url && !removeAvatar)) previewAvatar();
+  });
+  $("pfUsername").addEventListener("input", () => {
+    const el = $("pfUsername");
+    const cleaned = el.value.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (cleaned !== el.value) el.value = cleaned;
+    el.dataset.edited = "1";
+    checkUsername();
+  });
+  function checkUsername() {
+    const v = $("pfUsername").value;
+    const ok = USERNAME_RE.test(v);
+    $("pfUsernameHint").className = "field-hint" + (v && !ok ? " bad" : "");
+    $("pfUsernameHint").textContent = !v || ok
+      ? "3–20 characters: lowercase letters, numbers, underscores."
+      : v.length < 3 ? "Too short: at least 3 characters." : "Only lowercase letters, numbers and underscores.";
+    return ok;
+  }
+
+  // Crop to a centered square and shrink to 256px JPEG before upload.
+  function squareJpeg(file, size = 256) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        const c = document.createElement("canvas");
+        c.width = c.height = size;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+        URL.revokeObjectURL(url);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't process that image."))), "image/jpeg", 0.88);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That file isn't an image we can read.")); };
+      img.src = url;
+    });
+  }
+  $("avatarFile").addEventListener("change", async () => {
+    const file = $("avatarFile").files[0];
+    $("avatarFile").value = "";
+    if (!file) return;
+    if (!/^image\//.test(file.type)) return showProfileError("Please choose an image file.");
+    if (file.size > 15 * 1024 * 1024) return showProfileError("That image is over 15 MB. Pick a smaller one.");
+    try {
+      const blob = await squareJpeg(file);
+      if (pendingAvatar) URL.revokeObjectURL(pendingAvatar.url);
+      pendingAvatar = { blob, url: URL.createObjectURL(blob) };
+      removeAvatar = false;
+      showProfileError("");
+      previewAvatar();
+    } catch (e) { showProfileError(e.message); }
+  });
+  $("avatarRemove").addEventListener("click", () => {
+    if (pendingAvatar) { URL.revokeObjectURL(pendingAvatar.url); pendingAvatar = null; }
+    removeAvatar = true;
+    previewAvatar();
+  });
+
+  const avatarPathFromUrl = (url) => {
+    const marker = "/storage/v1/object/public/avatars/";
+    const i = url ? url.indexOf(marker) : -1;
+    return i >= 0 ? decodeURIComponent(url.slice(i + marker.length).split("?")[0]) : null;
+  };
+
+  $("profileForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showProfileError("");
+    const user = currentUser;
+    if (!user) return;
+    const display_name = $("pfDisplay").value.trim();
+    const username = $("pfUsername").value.trim();
+    const bio = $("pfBio").value.trim();
+    const favorite_genres = [...$("pfGenres").querySelectorAll(".chip.on")].map((c) => c.dataset.genre);
+    if (!display_name) return showProfileError("Add a display name.");
+    if (!checkUsername()) return showProfileError("Pick a valid username (3–20 lowercase letters, numbers or underscores).");
+
+    const btn = $("profileSave");
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    const oldAvatar = profile && profile.avatar_url;
+    let avatar_url = removeAvatar ? null : oldAvatar || null;
+    let uploadedPath = null;
+    try {
+      if (pendingAvatar) {
+        uploadedPath = `${user.id}/${Date.now()}.jpg`;
+        const { error: upErr } = await sb.storage.from("avatars").upload(uploadedPath, pendingAvatar.blob, { contentType: "image/jpeg", cacheControl: "31536000" });
+        if (upErr) throw new Error("Photo upload failed: " + upErr.message);
+        avatar_url = sb.storage.from("avatars").getPublicUrl(uploadedPath).data.publicUrl;
+      }
+      const row = { id: user.id, display_name, username, bio: bio || null, favorite_genres, avatar_url };
+      const { data, error } = await sb.from("profiles").upsert(row, { onConflict: "id" }).select();
+      if (error) {
+        if (uploadedPath) sb.storage.from("avatars").remove([uploadedPath]);
+        if (error.code === "23505") {
+          $("pfUsernameHint").className = "field-hint bad";
+          $("pfUsernameHint").textContent = `@${username} is taken. Try another.`;
+          throw new Error(`The username @${username} is already taken.`);
+        }
+        if (error.code === "23514") throw new Error("Some details are too long or in the wrong format. Check your username and bio.");
+        throw new Error(error.message || "Couldn't save your profile.");
+      }
+      if (currentUser !== user) return;
+      profile = (data && data[0]) || { ...profile, ...row };
+      // Clean up the previous photo once the new one is saved.
+      const oldPath = avatarPathFromUrl(oldAvatar);
+      if (oldPath && oldAvatar !== profile.avatar_url) sb.storage.from("avatars").remove([oldPath]);
+      renderHeaderProfile(profile);
+      closeProfileModal(true);
+      profileLocked = false;
+      if (profileWaiter) { profileWaiter(); profileWaiter = null; }
+    } catch (err) {
+      showProfileError(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
+  });
 
   // ---------- auth (Supabase email + password) ----------
   if (!window.supabase) {
