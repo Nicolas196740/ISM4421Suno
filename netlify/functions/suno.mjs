@@ -1,5 +1,7 @@
 // Pass-through proxy for the Suno API (https://docs.sunoapi.org).
-// Each user supplies their own API key in the x-suno-key header; it is forwarded
+// Callers must be signed in (Supabase email login): the Authorization header carries
+// the user's Supabase access token, which is checked before anything reaches Suno.
+// Each user supplies their own Suno API key in the x-suno-key header; it is forwarded
 // to Suno for that request only and is never stored or logged. Routes:
 //   POST /api/generate        -> /api/v1/generate
 //   GET  /api/status?taskId=  -> /api/v1/generate/record-info
@@ -9,6 +11,10 @@
 //   POST /api/callback        -> no-op receiver (Suno requires a callBackUrl; the app polls instead)
 
 const BASE = "https://api.sunoapi.org/api/v1";
+// Supabase project "ISM 4421". Both values are public (same as in index.html);
+// env vars override them if you ever point the app at another project.
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://ztksfrnobaefsrtnziqv.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_MfqkM90fPNLh4gsttD78tQ_X5wFiSfo";
 const MODELS = ["V6", "V6_WILD", "V6_MINI"];
 
 const json = (body, status = 200) =>
@@ -33,6 +39,39 @@ async function suno(path, key, init = {}) {
     return json({ code: res.status, msg: `Suno API returned HTTP ${res.status}` }, 502);
   }
   return json(data, res.ok ? 200 : res.status);
+}
+
+// Verified tokens are cached briefly so status polling doesn't hit Supabase every 5 seconds.
+const verified = new Map(); // access token -> cache expiry (ms)
+
+function tokenExpiry(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    return typeof payload.exp === "number" ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function isSignedIn(req) {
+  const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") || "");
+  if (!m) return false;
+  const token = m[1].trim();
+  const now = Date.now();
+  const cached = verified.get(token);
+  if (cached && cached > now) return true;
+
+  const exp = tokenExpiry(token);
+  if (exp && exp <= now) return false;
+  // Supabase Auth confirms the token is genuine, unexpired and the user still exists.
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return false;
+
+  if (verified.size > 1000) verified.clear();
+  verified.set(token, Math.min(now + 60_000, exp || now + 60_000));
+  return true;
 }
 
 const clampStr = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -78,8 +117,16 @@ export default async (req, context) => {
   // Suno posts results here; we poll instead, so just acknowledge.
   if (route === "callback") return json({ status: "received" });
 
+  try {
+    if (!(await isSignedIn(req))) {
+      return json({ code: 401, reason: "session", msg: "Please sign in to continue." }, 401);
+    }
+  } catch {
+    return json({ code: 503, msg: "Couldn't reach the login service. Try again in a moment." }, 503);
+  }
+
   const key = (req.headers.get("x-suno-key") || "").trim();
-  if (!key) return json({ code: 401, msg: "Add your Suno API key to continue." }, 401);
+  if (!key) return json({ code: 401, reason: "key", msg: "Add your Suno API key to continue." }, 401);
 
   const siteUrl = process.env.URL || url.origin;
   const callBackUrl = `${siteUrl}/api/callback`;

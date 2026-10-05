@@ -24,6 +24,7 @@
     --radius: 14px;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; }
   body {
     font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -68,7 +69,7 @@
 
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   label .hint { font-weight: 400; color: var(--muted); }
-  input[type=text], input[type=password], input[type=number], textarea, select {
+  input[type=text], input[type=email], input[type=password], input[type=number], textarea, select {
     width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 14px; outline: none;
   }
@@ -144,15 +145,67 @@
   .modal .card { width: 100%; max-width: 380px; }
 
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
+
+  /* ---------- auth ---------- */
+  .user { font-size: 13px; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 480px) { .user { display: none; } }
+  .auth-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; }
+  .auth-wrap .brand { margin-bottom: 20px; }
+  .auth-card { width: 100%; max-width: 400px; }
+  .auth-card h2 { font-size: 20px; margin: 0 0 4px; }
+  .auth-card .sub { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  .auth-links { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+  .linkbtn:hover { text-decoration: underline; }
+  .msg { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.4); color: #bbf7d0; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-top: 12px; display: none; }
+  .loading { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="loading" id="loadingView">Loading…</div>
+
+<!-- ===== Sign in / sign up (Supabase email + password) ===== -->
+<div class="auth-wrap" id="authView" hidden>
+  <div class="brand"><div class="logo">🎵</div> SongForge</div>
+  <form class="card auth-card" id="authForm" novalidate>
+    <h2 id="authTitle">Sign in</h2>
+    <p class="sub" id="authSub">Welcome back. Sign in to make music.</p>
+
+    <div id="emailRow">
+      <label for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com" required />
+    </div>
+    <div id="passwordRow">
+      <label for="authPassword">Password</label>
+      <input type="password" id="authPassword" autocomplete="current-password" placeholder="At least 6 characters" minlength="6" required />
+    </div>
+    <div id="password2Row" hidden>
+      <label for="authPassword2">Confirm password</label>
+      <input type="password" id="authPassword2" autocomplete="new-password" placeholder="Type it again" minlength="6" />
+    </div>
+
+    <button class="btn full" id="authSubmit" type="submit">Sign in</button>
+    <div class="error" id="authError"></div>
+    <div class="msg" id="authMsg"></div>
+
+    <div class="auth-links">
+      <button type="button" class="linkbtn" id="authSwitch">New here? Create an account</button>
+      <button type="button" class="linkbtn" id="authForgot">Forgot password?</button>
+    </div>
+    <div class="auth-links" id="resendRow" hidden>
+      <button type="button" class="linkbtn" id="authResend">Resend confirmation email</button>
+    </div>
+  </form>
+</div>
+
+<div class="wrap" id="appView" hidden>
   <header>
     <div class="brand"><div class="logo">🎵</div> SongForge</div>
     <div class="head-actions">
       <div class="credits" id="credits" title="Click to refresh">Credits: <b id="creditsVal">—</b></div>
       <button class="btn ghost sm" id="keyBtn" type="button">🔑 Add API key</button>
+      <span class="user" id="userEmail"></span>
+      <button class="btn ghost sm" id="signOutBtn" type="button">Sign out</button>
     </div>
   </header>
 
@@ -281,9 +334,13 @@
   </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  // Supabase project "ISM 4421". The publishable key is safe to expose in the browser.
+  const SUPABASE_URL = "https://ztksfrnobaefsrtnziqv.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_MfqkM90fPNLh4gsttD78tQ_X5wFiSfo";
   const LS_JOBS = "songforge.jobs.v1";
   const KEY_STORE = "songforge.apikey";
   const POLL_MS = 5000;
@@ -301,15 +358,18 @@
   };
 
   let mode = "simple";
-  let jobs = load();
+  let jobs = [];
+  let currentUser = null;
   const pollers = {};
 
-  // ---------- storage ----------
+  // ---------- storage (song history is kept per account) ----------
+  const jobsKey = () => LS_JOBS + "." + (currentUser ? currentUser.id : "anon");
   function load() {
-    try { return JSON.parse(localStorage.getItem(LS_JOBS)) || []; } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(jobsKey())) || []; } catch { return []; }
   }
   function save() {
-    try { localStorage.setItem(LS_JOBS, JSON.stringify(jobs.slice(0, 50))); } catch {}
+    if (!currentUser) return;
+    try { localStorage.setItem(jobsKey(), JSON.stringify(jobs.slice(0, 50))); } catch {}
   }
   // ---------- API key (kept in this browser only) ----------
   // Default: sessionStorage (cleared when the tab closes). "Remember" opts into localStorage.
@@ -368,12 +428,23 @@
   // ---------- api ----------
   async function api(path, opts = {}, retried = false) {
     if (!apiKey) await waitForKey();
+    const { data: { session } } = await sb.auth.getSession(); // refreshes the token if it expired
+    if (!session) { showAuth("signin", "Your session ended. Please sign in again."); throw new Error("Not signed in."); }
     const res = await fetch("/api/" + path, {
       ...opts,
-      headers: { "Content-Type": "application/json", "x-suno-key": apiKey, ...(opts.headers || {}) },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + session.access_token,
+        "x-suno-key": apiKey,
+        ...(opts.headers || {}),
+      },
     });
     let data;
     try { data = await res.json(); } catch { throw new Error(`Server error (HTTP ${res.status})`); }
+    if (data.reason === "session") {
+      await sb.auth.signOut({ scope: "local" });
+      throw new Error("Your session ended. Please sign in again.");
+    }
     if (data.code === 401 && !retried) {
       await waitForKey("Suno rejected that key. Check it and try again.");
       return api(path, opts, true);
@@ -528,7 +599,9 @@
   // ---------- polling ----------
   function poll(job) {
     if (pollers[job.taskId]) return;
+    const owner = currentUser && currentUser.id;
     const tick = async () => {
+      if (!currentUser || currentUser.id !== owner) { delete pollers[job.taskId]; return; } // signed out or switched accounts
       if (!apiKey) { pollers[job.taskId] = setTimeout(tick, POLL_MS); return; } // wait until a key is entered
       try {
         const d = await api("status?taskId=" + encodeURIComponent(job.taskId));
@@ -545,6 +618,7 @@
         job.status = "TIMEOUT";
         job.error = "Still not done after 10 minutes. Refresh later to check again.";
       }
+      if (!currentUser || currentUser.id !== owner) { delete pollers[job.taskId]; return; }
       save();
       renderJob(job);
       if (done || job.status === "TIMEOUT") { delete pollers[job.taskId]; if (done) refreshCredits(); return; }
@@ -639,8 +713,7 @@
 
   $("clearBtn").addEventListener("click", () => {
     if (!jobs.length || !confirm("Remove all songs from this list? (Download any you want to keep first.)")) return;
-    Object.values(pollers).forEach(clearTimeout);
-    for (const k in pollers) delete pollers[k];
+    stopPolling();
     jobs = [];
     save();
     render();
@@ -648,18 +721,198 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // ---------- init ----------
-  updateKeyBtn();
-  render();
-  if (!apiKey) openKeyModal();
-  jobs.forEach((j) => {
-    if (j.status !== "SUCCESS" && !FAIL_STATES.includes(j.status)) {
-      if (j.status === "TIMEOUT") j.status = "PENDING";
-      j.pollStart = Date.now(); // give reloaded jobs a fresh polling window
-      poll(j);
+  function stopPolling() {
+    Object.values(pollers).forEach(clearTimeout);
+    for (const k in pollers) delete pollers[k];
+  }
+
+  // ---------- app start (after sign-in) ----------
+  function startApp(user) {
+    if (currentUser && currentUser.id === user.id) return; // already running for this account
+    stopPolling();
+    currentUser = user;
+    $("userEmail").textContent = user.email || "";
+    jobs = load();
+    updateKeyBtn();
+    render();
+    if (!apiKey) openKeyModal();
+    jobs.forEach((j) => {
+      if (j.status !== "SUCCESS" && !FAIL_STATES.includes(j.status)) {
+        if (j.status === "TIMEOUT") j.status = "PENDING";
+        j.pollStart = Date.now(); // give reloaded jobs a fresh polling window
+        poll(j);
+      }
+    });
+    refreshCredits();
+  }
+
+  function stopApp() {
+    stopPolling();
+    currentUser = null;
+    jobs = [];
+    closeKeyModal();
+    keyWaiters.forEach((w) => w.rej(new Error("Signed out."))); keyWaiters = [];
+  }
+
+  // ---------- auth (Supabase email + password) ----------
+  if (!window.supabase) {
+    $("loadingView").textContent = "Couldn't load the sign-in service. Check your connection and refresh the page.";
+    return;
+  }
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
+  const redirectTo = location.origin + location.pathname;
+  let authMode = "signin";
+  let recovering = false;
+
+  const AUTH_COPY = {
+    signin: { title: "Sign in", sub: "Welcome back. Sign in to make music.", btn: "Sign in", sw: "New here? Create an account" },
+    signup: { title: "Create your account", sub: "Free to join. You'll confirm your email once.", btn: "Create account", sw: "Have an account? Sign in" },
+    forgot: { title: "Reset your password", sub: "We'll email you a link to set a new password.", btn: "Send reset link", sw: "Back to sign in" },
+    reset:  { title: "Set a new password", sub: "Choose a new password for your account.", btn: "Save new password", sw: "Back to sign in" },
+  };
+
+  function setAuthMode(m) {
+    authMode = m;
+    const c = AUTH_COPY[m];
+    $("authTitle").textContent = c.title;
+    $("authSub").textContent = c.sub;
+    $("authSubmit").textContent = c.btn;
+    $("authSwitch").textContent = c.sw;
+    $("emailRow").hidden = m === "reset";
+    $("passwordRow").hidden = m === "forgot";
+    $("password2Row").hidden = !(m === "signup" || m === "reset");
+    $("authForgot").hidden = m !== "signin";
+    $("authPassword").autocomplete = m === "signin" ? "current-password" : "new-password";
+    $("authPassword").value = "";
+    $("authPassword2").value = "";
+    $("resendRow").hidden = true;
+    authNotice("", "");
+  }
+
+  function authNotice(err, msg) {
+    $("authError").textContent = err; $("authError").style.display = err ? "block" : "none";
+    $("authMsg").textContent = msg; $("authMsg").style.display = msg ? "block" : "none";
+  }
+
+  function showAuth(m, err, msg) {
+    stopApp();
+    $("loadingView").hidden = true;
+    $("appView").hidden = true;
+    $("authView").hidden = false;
+    setAuthMode(m || "signin");
+    authNotice(err || "", msg || "");
+    setTimeout(() => (m === "reset" ? $("authPassword") : $("authEmail")).focus(), 0);
+  }
+
+  function showApp(user) {
+    $("loadingView").hidden = true;
+    $("authView").hidden = true;
+    $("appView").hidden = false;
+    startApp(user);
+  }
+
+  function friendlyAuthError(e) {
+    const m = (e && e.message) || "Something went wrong.";
+    if (/invalid login credentials/i.test(m)) return "Wrong email or password.";
+    if (/email not confirmed/i.test(m)) return "Please confirm your email first. Check your inbox (and spam).";
+    if (/already registered|already exists/i.test(m)) return "An account with this email already exists. Sign in instead.";
+    if (/rate limit|too many|security purposes/i.test(m)) return "Too many attempts. Please wait a few minutes and try again.";
+    return m;
+  }
+
+  $("authSwitch").addEventListener("click", () => setAuthMode(authMode === "signin" ? "signup" : "signin"));
+  $("authForgot").addEventListener("click", () => {
+    const email = $("authEmail").value;
+    setAuthMode("forgot");
+    $("authEmail").value = email;
+  });
+
+  $("authResend").addEventListener("click", async () => {
+    const email = $("authEmail").value.trim();
+    if (!email) return authNotice("Enter your email above first.", "");
+    const { error } = await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectTo } });
+    authNotice(error ? friendlyAuthError(error) : "", error ? "" : "Confirmation email sent again. Check your inbox (and spam).");
+  });
+
+  $("authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    authNotice("", "");
+    const email = $("authEmail").value.trim();
+    const password = $("authPassword").value;
+    const password2 = $("authPassword2").value;
+    if (authMode !== "reset" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return authNotice("Enter a valid email address.", "");
+    if (authMode !== "forgot" && password.length < 6) return authNotice("Password must be at least 6 characters.", "");
+    if ((authMode === "signup" || authMode === "reset") && password !== password2) return authNotice("Passwords don't match.", "");
+
+    const btn = $("authSubmit");
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Please wait…";
+    try {
+      if (authMode === "signin") {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          if (/email not confirmed/i.test(error.message)) $("resendRow").hidden = false;
+          throw error;
+        }
+        // onAuthStateChange shows the app
+      } else if (authMode === "signup") {
+        const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+        if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error("An account with this email already exists. Sign in instead.");
+        }
+        if (!data.session) {
+          setAuthMode("signin");
+          $("authEmail").value = email;
+          $("resendRow").hidden = false;
+          authNotice("", `Almost done! We sent a confirmation link to ${email}. Click it, then sign in here.`);
+        }
+      } else if (authMode === "forgot") {
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw error;
+        authNotice("", `If ${email} has an account, a reset link is on its way. Check your inbox (and spam).`);
+      } else if (authMode === "reset") {
+        const { data, error } = await sb.auth.updateUser({ password });
+        if (error) throw error;
+        recovering = false;
+        showApp(data.user);
+      }
+    } catch (err) {
+      authNotice(friendlyAuthError(err), "");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
     }
   });
-  refreshCredits();
+
+  $("signOutBtn").addEventListener("click", async () => {
+    setKey("", false); // don't leave the Suno key behind on a shared computer
+    await sb.auth.signOut();
+  });
+
+  // Errors from expired/used email links come back in the URL hash.
+  const hashParams = new URLSearchParams(location.hash.slice(1));
+  const linkError = hashParams.get("error_description");
+  const linkErrorCode = hashParams.get("error_code");
+  if (linkError) history.replaceState(null, "", location.pathname + location.search);
+
+  sb.auth.onAuthStateChange((event, session) => {
+    // Supabase recommends not awaiting other auth calls inside this callback.
+    setTimeout(() => {
+      if (event === "PASSWORD_RECOVERY") { recovering = true; showAuth("reset"); return; }
+      if (recovering) return; // stay on "set new password" until it's saved
+      if (session && session.user) showApp(session.user);
+      else if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+        const err = linkError
+          ? (linkErrorCode === "otp_expired" ? "That email link expired or was already used. Request a new one." : linkError)
+          : "";
+        showAuth("signin", event === "INITIAL_SESSION" ? err : "", event === "SIGNED_OUT" ? "You've been signed out." : "");
+      }
+    }, 0);
+  });
 })();
 </script>
 </body>

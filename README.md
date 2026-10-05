@@ -8,11 +8,19 @@ A one-page app that generates songs with the [Suno API](https://docs.sunoapi.org
 - Instrumental toggle and model picker (V6, V6 Wild, V6 Mini).
 - Live status polling, playback that can start before the song is finished, MP3 and cover downloads, and a lyrics view.
 - Song history saved in your browser, plus your credit balance in the header.
-- **Bring your own API key**: each user pastes their own sunoapi.org key when they open the app.
+- **Email login** (Supabase): sign up, confirm your email, sign in, sign out, reset a forgotten password.
+- **Bring your own API key**: each user pastes their own sunoapi.org key after signing in.
 
 ## How it works
 - `index.html`: the whole front end (no build step).
-- `netlify/functions/suno.mjs`: serverless pass-through at `/api/*`. It forwards the user's key to Suno with each request and never stores or logs it.
+- `netlify/functions/suno.mjs`: serverless pass-through at `/api/*`. It checks that the caller is signed in (Supabase access token), then forwards the user's Suno key to Suno. It never stores or logs the key.
+- Supabase project **ISM 4421** handles accounts. Its URL and publishable key are in both files; they're public by design.
+
+## Login
+- Email + password through Supabase Auth. New users confirm their email once.
+- Song history is kept per account in the browser.
+- Signing out also clears the Suno key from that browser.
+- Supabase's built-in email sender only allows a few emails per hour. That's fine for testing. For more sign-ups, add your own SMTP provider under **Authentication → Emails → SMTP Settings**.
 
 ## API keys
 No key is stored in the code or in Netlify. When someone opens the app, it asks for their Suno API key (get one at https://sunoapi.org/api-key).
@@ -22,6 +30,11 @@ No key is stored in the code or in Netlify. When someone opens the app, it asks 
 ## Deploy to Netlify
 1. In Netlify, go to **Add new site → Import an existing project**, pick this repo and branch `main`. Leave the build command empty and set the publish directory to `.`.
 2. Click **Deploy**. No environment variables are needed.
+3. In Supabase (project **ISM 4421**) go to **Authentication → URL Configuration**:
+   - **Site URL**: your Netlify URL, e.g. `https://your-site.netlify.app`
+   - **Redirect URLs**: add `https://your-site.netlify.app/**`
+
+   Without this, the links in confirmation and password-reset emails point to `localhost:3000`.
 
 ## Run locally
 ```bash
