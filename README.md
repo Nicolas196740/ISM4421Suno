@@ -49,3 +49,6 @@ No key is stored in the code or in Netlify. When someone opens the app, it asks 
 npm i -g netlify-cli
 netlify dev
 ```
+
+## Other projects in this repo
+- [`klar/`](klar/README.md): KLAR Construction lead-generation website (separate Netlify site, base directory `klar`).

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b5b7a"/><stop offset="1" stop-color="#e3b48a"/></linearGradient></defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1240" cy="300" r="90" fill="#f7d7ae" opacity=".7"/>
+  <g fill="#173a52">
+    <path d="M700 900V470l110-80 110 80v430z"/><path d="M920 900V440l120-90 120 90v460z"/><path d="M1160 900V480l100-70 100 70v420z"/><path d="M1360 900V430l120-90 120 90v470z"/>
+  </g>
+  <g fill="#f3d9b5" opacity=".85">
+    <rect x="740" y="520" width="40" height="50"/><rect x="830" y="520" width="40" height="50"/><rect x="740" y="620" width="40" height="50"/><rect x="830" y="620" width="40" height="50"/>
+    <rect x="965" y="500" width="45" height="55"/><rect x="1070" y="500" width="45" height="55"/><rect x="965" y="610" width="45" height="55"/><rect x="1070" y="610" width="45" height="55"/>
+    <rect x="1195" y="540" width="40" height="50"/><rect x="1285" y="540" width="40" height="50"/>
+    <rect x="1405" y="490" width="45" height="55"/><rect x="1510" y="490" width="45" height="55"/><rect x="1405" y="600" width="45" height="55"/><rect x="1510" y="600" width="45" height="55"/>
+  </g>
+  <g fill="#0f2a3d"><path d="M640 900c10-120 20-200 30-260 6 60 14 140 22 260z"/><path d="M600 640c40-30 80-30 110 5-40-12-75-10-110-5zM670 640c30-40 70-50 110-30-40 0-80 12-110 30z"/></g>
+</svg>

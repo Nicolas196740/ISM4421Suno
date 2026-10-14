@@ -1,0 +1,389 @@
+<!--meta
+title: Lead Dashboard | KLAR Construction
+description: Private lead dashboard.
+path: /admin
+noindex: true
+raw: true
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Lead Dashboard | KLAR Construction</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/assets/styles.css?v={{cssVer}}" />
+<style>
+  body { background: var(--sand); }
+  .bar { background: var(--brand); color: var(--white); }
+  .bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 64px; }
+  .bar img { height: 30px; width: auto; }
+  .bar .who { display: flex; align-items: center; gap: 12px; font-size: .9rem; color: #b7c8d6; }
+  .bar .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+  .bar button { min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: none; color: var(--white); font: inherit; font-weight: 600; cursor: pointer; }
+  .auth { max-width: 420px; margin: 48px auto; padding: 28px; }
+  .auth form { display: grid; gap: 14px; }
+  .auth .link { background: none; border: 0; color: var(--brand-2); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; justify-self: start; }
+  .msg { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: .92rem; font-weight: 600; }
+  .msg.err { background: #fdecea; color: var(--err); }
+  .msg.ok { background: #e9f3ec; color: var(--ok); }
+  main.dash { padding: 24px 0 64px; }
+  .dash-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .dash-head h1 { font-size: 1.7rem; margin: 0; }
+  .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  @media (min-width: 720px) { .kpis { grid-template-columns: repeat(5, 1fr); } }
+  .kpi { padding: 14px 16px; }
+  .kpi strong { display: block; font-size: 1.5rem; color: var(--brand); }
+  .kpi span { font-size: .82rem; color: var(--muted); }
+  .toolbar { display: grid; gap: 10px; padding: 14px; margin-bottom: 16px; }
+  @media (min-width: 720px) { .toolbar { grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; align-items: end; } }
+  .toolbar label { font-size: .8rem; font-weight: 600; color: var(--muted); display: grid; gap: 4px; }
+  .toolbar input, .toolbar select { min-height: 42px; padding: 8px 10px; }
+  .btn-sm { min-height: 42px; padding: 0 16px; }
+  table.leads { width: 100%; border-collapse: collapse; background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .leads th { text-align: left; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px; background: #faf8f4; border-bottom: 1px solid var(--line); }
+  .leads td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: .93rem; }
+  .leads tr.row { cursor: pointer; }
+  .leads tr.row:hover td { background: #fcfbf8; }
+  .leads tr.row.is-open td { background: #f7f3ec; }
+  .leads .name { font-weight: 700; color: var(--brand); }
+  .leads .sub { color: var(--muted); font-size: .85rem; word-break: break-all; }
+  .type { display: inline-block; font-size: .75rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .type-buyer { background: #e6f0f7; color: #1d4560; }
+  .type-investor { background: #e9f3ec; color: #1f7a4d; }
+  .type-land_owner { background: #fbefe4; color: #a95f27; }
+  .type-other { background: #eeeeee; color: #444; }
+  .leads select.status { min-height: 36px; padding: 4px 8px; font-size: .88rem; width: auto; }
+  .detail td { background: #fcfbf8; padding: 18px; }
+  .detail-grid { display: grid; gap: 18px; }
+  @media (min-width: 900px) { .detail-grid { grid-template-columns: 3fr 2fr; } }
+  .kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 6px 14px; margin: 0; font-size: .92rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .notes textarea { min-height: 140px; }
+  .notes .row-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: .85rem; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 12px !important; }
+  @media (max-width: 719px) {
+    table.leads, .leads tbody, .leads tr, .leads td { display: block; width: 100%; }
+    .leads thead { display: none; }
+    .leads tr.row { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; }
+    .leads tr.row td { padding: 0; border: 0; background: none !important; }
+    .leads td.c-type { grid-column: 2; grid-row: 1; text-align: right; }
+    .leads td.c-who { grid-column: 1; grid-row: 1 / span 2; }
+    .leads td.c-date { grid-column: 2; grid-row: 2; text-align: right; color: var(--muted); font-size: .82rem; }
+    .leads td.c-summary { grid-column: 1 / -1; color: var(--muted); font-size: .88rem; }
+    .leads td.c-status { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <img src="/assets/logo-light.svg" alt="KLAR Construction" width="148" height="36" />
+    <div class="who" id="who" hidden><span id="who-email"></span><button id="sign-out" type="button">Sign out</button></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Sign in -->
+  <div class="card auth" id="auth-view" hidden>
+    <h1 style="font-size:1.5rem">Lead dashboard</h1>
+    <p class="muted">Sign in with your admin account.</p>
+    <form id="sign-in-form">
+      <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password" required /></div>
+      <p class="msg" id="auth-msg" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      <button class="link" type="button" id="forgot">Forgot password?</button>
+    </form>
+  </div>
+
+  <!-- Set new password (from a reset email) -->
+  <div class="card auth" id="reset-view" hidden>
+    <h1 style="font-size:1.5rem">Set a new password</h1>
+    <form id="reset-form">
+      <div class="field"><label for="r-pass">New password</label><input id="r-pass" type="password" autocomplete="new-password" minlength="10" required /></div>
+      <p class="msg" id="reset-msg" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit">Save password</button>
+    </form>
+  </div>
+
+  <!-- Signed in but not on the admin list -->
+  <div class="card auth" id="denied-view" hidden>
+    <h1 style="font-size:1.5rem">No access</h1>
+    <p class="muted">This account isn't on the admin list. Ask the site owner to add it, or sign out and use a different account.</p>
+  </div>
+</div>
+
+<main class="dash" id="dash-view" hidden>
+  <div class="wrap">
+    <div class="dash-head">
+      <h1>Leads</h1>
+      <div class="btn-row">
+        <button class="btn btn-outline btn-sm" type="button" id="refresh">Refresh</button>
+        <button class="btn btn-primary btn-sm" type="button" id="export">Export CSV</button>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card toolbar">
+      <label>Search<input id="q" type="text" placeholder="Name, email, phone, address…" /></label>
+      <label>Lead type
+        <select id="f-type"><option value="">All types</option><option value="buyer">Home buyer</option><option value="investor">Investor</option><option value="land_owner">Land owner</option><option value="other">Other</option></select>
+      </label>
+      <label>Status
+        <select id="f-status"><option value="">All statuses</option></select>
+      </label>
+      <label>From<input id="f-from" type="date" /></label>
+      <label>To<input id="f-to" type="date" /></label>
+      <button class="btn btn-outline btn-sm" type="button" id="clear">Clear</button>
+    </div>
+    <p class="msg err" id="dash-msg" hidden></p>
+    <table class="leads">
+      <thead><tr><th>Received</th><th>Contact</th><th>Type</th><th>Summary</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="muted" id="count" style="margin-top:10px;font-size:.88rem"></p>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script>
+(() => {
+  const sb = window.supabase.createClient("{{supabaseUrl}}", "{{supabaseKey}}");
+  const STATUSES = ["New", "Contacted", "Qualified", "Not a fit", "Closed"];
+  const TYPES = { buyer: "Home buyer", investor: "Investor", land_owner: "Land owner", other: "Other" };
+  const INTEREST = { buy_completed: "Buy completed property", invest_in_project: "Invest in a project", both: "Both" };
+  const CONTACT = { email: "Email", phone: "Phone call", text: "Text message" };
+  const FIELDS = [
+    ["full_name", "Name"], ["email", "Email"], ["phone", "Phone"], ["preferred_contact", "Preferred contact"],
+    ["budget_range", "Budget"], ["desired_area", "Desired area"], ["timeline", "Timeline"], ["pre_approved", "Pre-approved"],
+    ["investment_range", "Investment range"], ["investor_interest", "Interest"], ["experience_level", "Experience"],
+    ["property_address", "Property address"], ["lot_size", "Lot size"], ["current_zoning", "Zoning"], ["asking_price", "Asking price"], ["owner_or_agent", "Owner or agent"],
+    ["message", "Message"], ["heard_about", "Heard about us"], ["consent_contact", "Consent to contact"], ["consent_sms", "OK to text"], ["source_page", "Submitted from"],
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const views = ["auth-view", "reset-view", "denied-view", "dash-view"];
+  const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDate = (iso) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const pretty = (k, v) => {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "boolean") return v ? "Yes" : "No";
+    if (k === "investor_interest") return INTEREST[v] || v;
+    if (k === "preferred_contact") return CONTACT[v] || v;
+    if (k === "owner_or_agent") return v === "owner" ? "Owner" : "Agent / broker";
+    return v;
+  };
+  const summary = (l) => {
+    if (l.lead_type === "buyer") return [l.budget_range, l.desired_area, l.timeline].filter(Boolean).join(" · ");
+    if (l.lead_type === "investor") return [l.investment_range, INTEREST[l.investor_interest]].filter(Boolean).join(" · ");
+    if (l.lead_type === "land_owner") return [l.property_address, l.lot_size, l.asking_price].filter(Boolean).join(" · ");
+    return (l.message || "").slice(0, 90);
+  };
+  const msg = (el, text, kind = "err") => { el.textContent = text; el.className = `msg ${kind}`; el.hidden = !text; };
+
+  let leads = [];
+  let openId = null;
+  let recovering = false;
+
+  STATUSES.forEach((s) => $("f-status").insertAdjacentHTML("beforeend", `<option>${s}</option>`));
+
+  // ---------- Auth ----------
+  async function route(session) {
+    if (recovering) return show("reset-view");
+    if (!session) { $("who").hidden = true; return show("auth-view"); }
+    $("who").hidden = false;
+    $("who-email").textContent = session.user.email;
+    const { data: isAdmin, error } = await sb.rpc("is_admin");
+    if (error || !isAdmin) return show("denied-view");
+    show("dash-view");
+    load();
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") recovering = true;
+    if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "PASSWORD_RECOVERY") {
+      setTimeout(() => route(session), 0); // don't await Supabase calls inside the callback
+    }
+  });
+
+  $("sign-in-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    msg($("auth-msg"), "");
+    const { error } = await sb.auth.signInWithPassword({ email: $("a-email").value.trim(), password: $("a-pass").value });
+    btn.disabled = false;
+    if (error) msg($("auth-msg"), error.message === "Invalid login credentials" ? "Wrong email or password." : error.message);
+  });
+
+  $("forgot").addEventListener("click", async () => {
+    const email = $("a-email").value.trim();
+    if (!email) return msg($("auth-msg"), "Enter your email first, then click Forgot password.");
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/admin" });
+    msg($("auth-msg"), error ? error.message : "If that account exists, a reset link is on its way.", error ? "err" : "ok");
+  });
+
+  $("reset-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { error } = await sb.auth.updateUser({ password: $("r-pass").value });
+    if (error) return msg($("reset-msg"), error.message);
+    recovering = false;
+    history.replaceState(null, "", "/admin");
+    const { data } = await sb.auth.getSession();
+    route(data.session);
+  });
+
+  $("sign-out").addEventListener("click", () => sb.auth.signOut());
+
+  // ---------- Data ----------
+  async function load() {
+    msg($("dash-msg"), "");
+    const all = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from("leads").select("*").order("created_at", { ascending: false }).range(from, from + 999);
+      if (error) return msg($("dash-msg"), "Couldn't load leads: " + error.message);
+      all.push(...data);
+      if (data.length < 1000) break;
+    }
+    leads = all;
+    render();
+  }
+
+  function filtered() {
+    const q = $("q").value.trim().toLowerCase();
+    const type = $("f-type").value, status = $("f-status").value;
+    const from = $("f-from").value ? new Date($("f-from").value + "T00:00:00") : null;
+    const to = $("f-to").value ? new Date($("f-to").value + "T23:59:59.999") : null;
+    return leads.filter((l) => {
+      if (type && l.lead_type !== type) return false;
+      if (status && l.status !== status) return false;
+      const d = new Date(l.created_at);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      if (q) {
+        const hay = [l.full_name, l.email, l.phone, l.property_address, l.desired_area, l.message, l.notes].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderKpis() {
+    const weekAgo = Date.now() - 7 * 864e5;
+    const k = [
+      [leads.length, "Total leads"],
+      [leads.filter((l) => l.status === "New").length, "New, not contacted"],
+      [leads.filter((l) => new Date(l.created_at) >= weekAgo).length, "Last 7 days"],
+      [leads.filter((l) => l.status === "Qualified").length, "Qualified"],
+      [leads.filter((l) => l.status === "Closed").length, "Closed"],
+    ];
+    $("kpis").innerHTML = k.map(([n, l]) => `<div class="card kpi"><strong>${n}</strong><span>${l}</span></div>`).join("");
+  }
+
+  function detailHtml(l) {
+    const rows = FIELDS.map(([k, label]) => [label, pretty(k, l[k])]).filter(([, v]) => v !== null);
+    return `<tr class="detail" data-detail="${l.id}"><td colspan="5">
+      <div class="detail-grid">
+        <dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}<dt>Last updated</dt><dd>${esc(fmtDate(l.updated_at))}</dd></dl>
+        <div class="notes">
+          <div class="field"><label for="n-${l.id}">Notes</label><textarea id="n-${l.id}" data-notes="${l.id}" maxlength="10000" placeholder="Call notes, next steps…">${esc(l.notes)}</textarea></div>
+          <div class="row-actions"><button class="btn btn-primary btn-sm" type="button" data-save="${l.id}">Save notes</button><span data-saved="${l.id}"></span></div>
+          <div class="btn-row" style="margin-top:14px">
+            <a class="btn btn-outline btn-sm" href="mailto:${esc(l.email)}">Email</a>
+            <a class="btn btn-outline btn-sm" href="tel:${esc(l.phone)}">Call</a>
+            ${l.consent_sms ? `<a class="btn btn-outline btn-sm" href="sms:${esc(l.phone)}">Text</a>` : ""}
+          </div>
+        </div>
+      </div></td></tr>`;
+  }
+
+  function render() {
+    renderKpis();
+    const list = filtered();
+    $("count").textContent = `Showing ${list.length} of ${leads.length} leads`;
+    if (!list.length) {
+      $("rows").innerHTML = `<tr><td class="empty" colspan="5">${leads.length ? "No leads match these filters." : "No leads yet. New form submissions will show up here."}</td></tr>`;
+      return;
+    }
+    $("rows").innerHTML = list.map((l) => `
+      <tr class="row${l.id === openId ? " is-open" : ""}" data-id="${l.id}">
+        <td class="c-date">${esc(fmtDate(l.created_at))}</td>
+        <td class="c-who"><div class="name">${esc(l.full_name)}</div><div class="sub">${esc(l.email)}</div><div class="sub">${esc(l.phone)}</div></td>
+        <td class="c-type"><span class="type type-${esc(l.lead_type)}">${esc(TYPES[l.lead_type] || l.lead_type)}</span></td>
+        <td class="c-summary">${esc(summary(l))}</td>
+        <td class="c-status"><select class="status" data-status="${l.id}" aria-label="Status for ${esc(l.full_name)}">${STATUSES.map((s) => `<option${s === l.status ? " selected" : ""}>${s}</option>`).join("")}</select></td>
+      </tr>${l.id === openId ? detailHtml(l) : ""}`).join("");
+  }
+
+  async function update(id, patch) {
+    const { data, error } = await sb.from("leads").update(patch).eq("id", id).select().single();
+    if (error) { msg($("dash-msg"), "Couldn't save: " + error.message); return null; }
+    const i = leads.findIndex((l) => l.id === id);
+    if (i >= 0) leads[i] = data;
+    return data;
+  }
+
+  $("rows").addEventListener("click", async (e) => {
+    const save = e.target.closest("[data-save]");
+    if (save) {
+      const id = save.dataset.save;
+      save.disabled = true;
+      const ok = await update(id, { notes: document.querySelector(`[data-notes="${id}"]`).value.trim() || null });
+      save.disabled = false;
+      const s = document.querySelector(`[data-saved="${id}"]`);
+      if (ok && s) s.textContent = "Saved " + new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      return;
+    }
+    if (e.target.closest("select, a, button, textarea, .detail")) return;
+    const row = e.target.closest("tr.row");
+    if (!row) return;
+    openId = openId === row.dataset.id ? null : row.dataset.id;
+    render();
+  });
+
+  $("rows").addEventListener("change", async (e) => {
+    const sel = e.target.closest("select[data-status]");
+    if (!sel) return;
+    sel.disabled = true;
+    const ok = await update(sel.dataset.status, { status: sel.value });
+    sel.disabled = false;
+    if (ok) render();
+  });
+
+  ["q", "f-type", "f-status", "f-from", "f-to"].forEach((id) => $(id).addEventListener("input", render));
+  $("clear").addEventListener("click", () => { ["q", "f-type", "f-status", "f-from", "f-to"].forEach((id) => ($(id).value = "")); render(); });
+  $("refresh").addEventListener("click", load);
+
+  // ---------- CSV ----------
+  $("export").addEventListener("click", () => {
+    const list = filtered();
+    const cols = [["created_at", "Received"], ["status", "Status"], ["lead_type", "Lead type"], ...FIELDS, ["notes", "Notes"], ["updated_at", "Last updated"]];
+    const cell = (v) => {
+      let s = v === null || v === undefined ? "" : typeof v === "boolean" ? (v ? "Yes" : "No") : String(v);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // stop spreadsheet formula injection
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [cols.map(([, h]) => cell(h)).join(",")];
+    for (const l of list) {
+      lines.push(cols.map(([k]) => {
+        if (k === "lead_type") return cell(TYPES[l[k]] || l[k]);
+        if (k === "created_at" || k === "updated_at") return cell(new Date(l[k]).toLocaleString("en-US"));
+        return cell(pretty(k, l[k]));
+      }).join(","));
+    }
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `klar-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+})();
+</script>
+</body>
+</html>
